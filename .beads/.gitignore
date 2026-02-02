@@ -9,3 +9,6 @@
 # Temporary
 last-touched
 *.tmp
+
+# br history
+.br_history/
