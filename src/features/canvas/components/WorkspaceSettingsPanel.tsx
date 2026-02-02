@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   fetchWorkspaceSettings,
@@ -11,6 +11,15 @@ type WorkspaceSettingsPanelProps = {
   onSaved: () => void;
 };
 
+type PathCheckResult = {
+  input: string;
+  resolvedPath: string;
+  exists: boolean;
+  isDirectory: boolean;
+  readable: boolean;
+  writable: boolean;
+};
+
 export const WorkspaceSettingsPanel = ({
   onClose,
   onSaved,
@@ -21,6 +30,9 @@ export const WorkspaceSettingsPanel = ({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pathCheck, setPathCheck] = useState<PathCheckResult | null>(null);
+  const [pathCheckError, setPathCheckError] = useState<string | null>(null);
+  const [pathChecking, setPathChecking] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -47,16 +59,27 @@ export const WorkspaceSettingsPanel = ({
     };
   }, []);
 
+  const trimmedPath = workspacePath.trim();
+  const pathLooksValid =
+    !trimmedPath || trimmedPath.startsWith("/") || trimmedPath === "~" || trimmedPath.startsWith("~/");
+  const pathHelpText =
+    "Use an absolute path (e.g. /Users/you/code) or ~ / ~/... . Studio will verify it exists and is a directory when you save.";
+
   const handleSave = useCallback(async () => {
-    if (!workspacePath.trim()) {
+    const trimmedPath = workspacePath.trim();
+    if (!trimmedPath) {
       setError("Workspace path is required.");
+      return;
+    }
+    if (!(trimmedPath.startsWith("/") || trimmedPath === "~" || trimmedPath.startsWith("~/"))) {
+      setError("Workspace path must be an absolute path (or ~).");
       return;
     }
     setSaving(true);
     setError(null);
     try {
       const result = await updateWorkspaceSettings({
-        workspacePath: workspacePath.trim(),
+        workspacePath: trimmedPath,
       });
       setWarnings(result.warnings ?? []);
       if (result.warnings.length > 0) {
@@ -105,10 +128,19 @@ export const WorkspaceSettingsPanel = ({
               className="h-11 rounded-lg border border-input bg-background px-4 text-sm text-foreground outline-none transition focus:border-ring"
               value={workspacePath}
               onChange={(event) => setWorkspacePath(event.target.value)}
-              placeholder="~/.clawdbot/workspace"
+              placeholder="~/code"
               disabled={loading || saving}
+              aria-invalid={!pathLooksValid}
               data-testid="workspace-settings-path"
             />
+            <span className="text-[11px] font-normal normal-case tracking-normal text-muted-foreground">
+              {pathHelpText}
+            </span>
+            {!pathLooksValid ? (
+              <span className="text-[11px] font-normal normal-case tracking-normal text-destructive">
+                Path must start with <code>/</code> or use <code>~</code> / <code>~/</code>.
+              </span>
+            ) : null}
           </label>
         </div>
 
@@ -117,7 +149,7 @@ export const WorkspaceSettingsPanel = ({
             className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
             type="button"
             onClick={handleSave}
-            disabled={loading || saving}
+            disabled={loading || saving || !pathLooksValid}
             data-testid="workspace-settings-save"
           >
             {saving ? "Saving..." : "Save settings"}

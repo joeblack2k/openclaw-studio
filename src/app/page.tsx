@@ -6,6 +6,7 @@ import { CanvasFlow } from "@/features/canvas/components/CanvasFlow";
 import { AgentInspectPanel } from "@/features/canvas/components/AgentInspectPanel";
 import { HeaderBar } from "@/features/canvas/components/HeaderBar";
 import { WorkspaceSettingsPanel } from "@/features/canvas/components/WorkspaceSettingsPanel";
+import { CanvasOnboardingPanel } from "@/features/canvas/components/CanvasOnboardingPanel";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { MAX_TILE_HEIGHT, MIN_TILE_SIZE } from "@/lib/canvasTileDefaults";
@@ -1799,6 +1800,19 @@ const AgentCanvasPage = () => {
             canCleanupArchived={hasArchivedTiles}
           />
         </div>
+
+        {!state.loading ? (
+          <div className="pointer-events-auto mx-auto w-full max-w-4xl">
+            <CanvasOnboardingPanel
+              gatewayStatus={status}
+              needsWorkspace={needsWorkspace}
+              tileCount={tiles.length}
+              onOpenWorkspaceSettings={handleOpenWorkspaceSettings}
+              onNewAgent={handleNewAgent}
+              canCreateAgent={Boolean(project && !project.archivedAt && !needsWorkspace)}
+            />
+          </div>
+        ) : null}
 
         {state.loading ? (
           <div className="pointer-events-auto mx-auto w-full max-w-4xl">
