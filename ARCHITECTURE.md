@@ -28,7 +28,7 @@ Non-goals:
 This keeps feature cohesion high while preserving a clear client/server boundary.
 
 ## Main modules / bounded contexts
-- **Focused agent UI** (`src/features/agents`): focused agent panel, fleet sidebar, inspect panel, and local in-memory state + actions. Agents render a status-first summary and latest-update preview driven by gateway events. Runtime chat/agent event translation and summary patch derivation are centralized through bridge helpers (`src/features/agents/state/runtimeEventBridge.ts`) and consumed from a single runtime listener path in `src/app/page.tsx`. Full transcripts load only on explicit “Load history” actions.
+- **Focused agent UI** (`src/features/agents`): focused agent panel, fleet sidebar, inspect panel, and local in-memory state + actions. Agents render a status-first summary and latest-update preview driven by gateway events. Gateway event classification (`presence`/`heartbeat` summary refresh and `chat`/`agent` runtime streams) is centralized in bridge helpers (`src/features/agents/state/runtimeEventBridge.ts`) and consumed from one gateway subscription path in `src/app/page.tsx`. Full transcripts load only on explicit “Load history” actions.
 - **Studio settings** (`src/lib/studio`, `src/app/api/studio`): local settings store for gateway URL/token and focused preferences (`src/lib/studio/settings.ts`, `src/lib/studio/settings.server.ts`, `src/app/api/studio/route.ts`). `src/lib/studio/coordinator.ts` now owns both the `/api/studio` transport helpers and shared client-side load/patch scheduling for gateway, focused, and studio-session settings.
 - **Gateway** (`src/lib/gateway`): WebSocket client for agent runtime (frames, connect, request/response). The OpenClaw control UI client is vendored in `src/lib/gateway/openclaw/GatewayBrowserClient.ts` with a sync script at `scripts/sync-openclaw-gateway-client.ts`.
 - **Gateway-backed config + agent-file edits** (`src/lib/gateway/agentConfig.ts`, `src/lib/gateway/tools.ts`, `src/app/api/gateway/tools/route.ts`): agent rename/heartbeat via `config.get` + `config.patch`, agent file read/write via `/tools/invoke` proxy.
@@ -67,7 +67,7 @@ Flow:
 2. `GatewayClient` connects + sends `connect` request.
 3. UI requests `agents.list` and builds session keys via `buildAgentMainSessionKey(agentId, mainKey)`.
 4. UI sends requests (frames) and receives event streams.
-5. A single runtime listener in `src/app/page.tsx` handles chat + agent frames and delegates lifecycle/stream/tool dedupe decisions to `src/features/agents/state/runtimeEventBridge.ts`.
+5. A single gateway listener in `src/app/page.tsx` classifies `presence`/`heartbeat`/`chat`/`agent` events through `classifyGatewayEventKind` in `src/features/agents/state/runtimeEventBridge.ts`, then routes to summary-refresh or runtime stream handling.
 6. Agent store updates agent output/state.
 
 ### 3) Agent config + agent files
@@ -109,6 +109,7 @@ Flow:
 - **Node runtime for API routes**: required for filesystem access and tool proxying; trade-off is Node-only server runtime.
 - **Event-driven summaries + on-demand history**: keeps the dashboard lightweight; trade-off is history not being available until requested.
 - **Single runtime event bridge for chat+agent streams**: one listener path in `src/app/page.tsx` now routes runtime frames through pure bridge helpers (`src/features/agents/state/runtimeEventBridge.ts`), including summary patch extraction that previously lived in a separate module; trade-off is a denser bridge contract, but lower divergence risk across lifecycle cleanup/state transitions.
+- **Single gateway event intake subscription**: one `client.onEvent` path now handles both summary-refresh events (`presence`/`heartbeat`) and runtime stream events (`chat`/`agent`) using bridge classification helpers; trade-off is a larger callback surface, but fewer lifecycle and cleanup divergence points.
 
 ## Mermaid diagrams
 ### C4 Level 1 (System Context)
