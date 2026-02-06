@@ -83,7 +83,7 @@ import { buildAvatarDataUrl } from "@/lib/avatars/multiavatar";
 import { getStudioSettingsCoordinator } from "@/lib/studio/coordinator";
 import { resolveFocusedPreference } from "@/lib/studio/settings";
 import { applySessionSettingMutation } from "@/features/agents/state/sessionSettingsMutations";
-import { syncGatewaySessionSettings } from "@/lib/gateway/sessionSettings";
+import { syncGatewaySessionSettings } from "@/lib/gateway/GatewayClient";
 
 type ChatHistoryMessage = Record<string, unknown>;
 

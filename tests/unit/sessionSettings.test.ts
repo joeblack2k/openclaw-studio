@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { syncGatewaySessionSettings } from "@/lib/gateway/sessionSettings";
+import { syncGatewaySessionSettings } from "@/lib/gateway/GatewayClient";
 import type { GatewayClient } from "@/lib/gateway/GatewayClient";
 
 describe("session settings sync helper", () => {

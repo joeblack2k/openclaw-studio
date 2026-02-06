@@ -1,5 +1,4 @@
-import type { GatewayClient } from "@/lib/gateway/GatewayClient";
-import { syncGatewaySessionSettings } from "@/lib/gateway/sessionSettings";
+import { syncGatewaySessionSettings, type GatewayClient } from "@/lib/gateway/GatewayClient";
 
 type SessionSettingField = "model" | "thinkingLevel";
 
