@@ -1,6 +1,7 @@
+![Home screen](home-screen.png)
+
 # OpenClaw Studio
 
-![Read Me Image](readme-image.png)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/VEpdKJ9e)
 
 When you run multiple agents, you need a place to see what's happening.
