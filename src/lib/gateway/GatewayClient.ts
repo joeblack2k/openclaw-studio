@@ -87,6 +87,7 @@ export type GatewayStatus = "disconnected" | "connecting" | "connected";
 export type GatewayConnectOptions = {
   gatewayUrl: string;
   token?: string;
+  authScopeKey?: string;
 };
 
 export { GatewayResponseError } from "@/lib/gateway/errors";
@@ -145,6 +146,7 @@ export class GatewayClient {
     this.client = new GatewayBrowserClient({
       url: options.gatewayUrl,
       token: options.token,
+      authScopeKey: options.authScopeKey,
       onHello: (hello) => {
         this.lastHello = hello;
         this.updateStatus("connected");
@@ -393,6 +395,7 @@ export const useGatewayConnection = (
       await client.connect({
         gatewayUrl: resolveStudioProxyGatewayUrl(),
         token,
+        authScopeKey: gatewayUrl,
       });
       await ensureGatewayReloadModeHotForLocalStudio({
         client,

@@ -15,7 +15,11 @@ const setupAndImportHook = async (gatewayUrl: string | null) => {
   vi.resetModules();
   vi.spyOn(console, "info").mockImplementation(() => {});
 
-  const captured: { url: string | null; token: unknown } = { url: null, token: null };
+  const captured: { url: string | null; token: unknown; authScopeKey: unknown } = {
+    url: null,
+    token: null,
+    authScopeKey: null,
+  };
 
   vi.doMock("../../src/lib/gateway/openclaw/GatewayBrowserClient", () => {
     class GatewayBrowserClient {
@@ -30,6 +34,7 @@ const setupAndImportHook = async (gatewayUrl: string | null) => {
       constructor(opts: Record<string, unknown>) {
         captured.url = typeof opts.url === "string" ? opts.url : null;
         captured.token = "token" in opts ? opts.token : null;
+        captured.authScopeKey = "authScopeKey" in opts ? opts.authScopeKey : null;
         this.opts = {
           onHello: typeof opts.onHello === "function" ? (opts.onHello as (hello: unknown) => void) : undefined,
           onEvent: typeof opts.onEvent === "function" ? (opts.onEvent as (event: unknown) => void) : undefined,
@@ -140,5 +145,6 @@ describe("useGatewayConnection", () => {
       expect(captured.url).toBe("ws://localhost:3000/api/gateway/ws");
     });
     expect(captured.token).toBe("");
+    expect(captured.authScopeKey).toBe("ws://127.0.0.1:18789");
   });
 });

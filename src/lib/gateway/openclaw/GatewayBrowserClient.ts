@@ -108,6 +108,16 @@ type DeviceAuthStore = {
 
 const DEVICE_AUTH_STORAGE_KEY = "openclaw.device.auth.v1";
 
+function normalizeAuthScope(scope: string | undefined): string {
+  const trimmed = scope?.trim();
+  if (!trimmed) return "default";
+  return trimmed.toLowerCase();
+}
+
+function buildScopedTokenKey(scope: string, role: string): string {
+  return `${scope}::${role}`;
+}
+
 function normalizeRole(role: string): string {
   return role.trim();
 }
@@ -144,11 +154,13 @@ function writeDeviceAuthStore(store: DeviceAuthStore) {
   }
 }
 
-function loadDeviceAuthToken(params: { deviceId: string; role: string }): DeviceAuthEntry | null {
+function loadDeviceAuthToken(params: { deviceId: string; role: string; scope: string }): DeviceAuthEntry | null {
   const store = readDeviceAuthStore();
   if (!store || store.deviceId !== params.deviceId) return null;
   const role = normalizeRole(params.role);
-  const entry = store.tokens[role];
+  const scope = normalizeAuthScope(params.scope);
+  const key = buildScopedTokenKey(scope, role);
+  const entry = store.tokens[key];
   if (!entry || typeof entry.token !== "string") return null;
   return entry;
 }
@@ -156,10 +168,13 @@ function loadDeviceAuthToken(params: { deviceId: string; role: string }): Device
 function storeDeviceAuthToken(params: {
   deviceId: string;
   role: string;
+  scope: string;
   token: string;
   scopes?: string[];
 }): DeviceAuthEntry {
   const role = normalizeRole(params.role);
+  const scope = normalizeAuthScope(params.scope);
+  const key = buildScopedTokenKey(scope, role);
   const next: DeviceAuthStore = {
     version: 1,
     deviceId: params.deviceId,
@@ -175,17 +190,22 @@ function storeDeviceAuthToken(params: {
     scopes: normalizeScopes(params.scopes),
     updatedAtMs: Date.now(),
   };
-  next.tokens[role] = entry;
+  next.tokens[key] = entry;
   writeDeviceAuthStore(next);
   return entry;
 }
 
-function clearDeviceAuthToken(params: { deviceId: string; role: string }) {
+function clearDeviceAuthToken(params: { deviceId: string; role: string; scope: string }) {
   const store = readDeviceAuthStore();
   if (!store || store.deviceId !== params.deviceId) return;
   const role = normalizeRole(params.role);
-  if (!store.tokens[role]) return;
+  const scope = normalizeAuthScope(params.scope);
+  const key = buildScopedTokenKey(scope, role);
+  const hasScoped = Boolean(store.tokens[key]);
+  const hasLegacy = Boolean(store.tokens[role]);
+  if (!hasScoped && !hasLegacy) return;
   const next = { ...store, tokens: { ...store.tokens } };
+  delete next.tokens[key];
   delete next.tokens[role];
   writeDeviceAuthStore(next);
 }
@@ -336,6 +356,7 @@ export type GatewayBrowserClientOptions = {
   url: string;
   token?: string;
   password?: string;
+  authScopeKey?: string;
   clientName?: string;
   clientVersion?: string;
   platform?: string;
@@ -418,6 +439,7 @@ export class GatewayBrowserClient {
 
     const scopes = ["operator.admin", "operator.approvals", "operator.pairing"];
     const role = "operator";
+    const authScopeKey = normalizeAuthScope(this.opts.authScopeKey ?? this.opts.url);
     let deviceIdentity: Awaited<ReturnType<typeof loadOrCreateDeviceIdentity>> | null = null;
     let canFallbackToShared = false;
     let authToken = this.opts.token;
@@ -427,6 +449,7 @@ export class GatewayBrowserClient {
       const storedToken = loadDeviceAuthToken({
         deviceId: deviceIdentity.deviceId,
         role,
+        scope: authScopeKey,
       })?.token;
       authToken = storedToken ?? this.opts.token;
       canFallbackToShared = Boolean(storedToken && this.opts.token);
@@ -496,6 +519,7 @@ export class GatewayBrowserClient {
           storeDeviceAuthToken({
             deviceId: deviceIdentity.deviceId,
             role: hello.auth.role ?? role,
+            scope: authScopeKey,
             token: hello.auth.deviceToken,
             scopes: hello.auth.scopes ?? [],
           });
@@ -505,7 +529,7 @@ export class GatewayBrowserClient {
       })
       .catch(() => {
         if (canFallbackToShared && deviceIdentity) {
-          clearDeviceAuthToken({ deviceId: deviceIdentity.deviceId, role });
+          clearDeviceAuthToken({ deviceId: deviceIdentity.deviceId, role, scope: authScopeKey });
         }
         this.ws?.close(CONNECT_FAILED_CLOSE_CODE, "connect failed");
       });
