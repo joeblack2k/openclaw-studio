@@ -78,6 +78,65 @@ const extractReasoningBody = (value: string): string | null => {
   return body || null;
 };
 
+const normalizeReasoningComparable = (value: string): string =>
+  normalizeAssistantDisplayText(value).trim().toLowerCase();
+
+const hasUnclosedThinkingTag = (value: string): boolean => {
+  const openMatches = [
+    ...value.matchAll(/<\s*(?:think(?:ing)?|analysis|thought|antthinking)\s*>/gi),
+  ];
+  if (openMatches.length === 0) return false;
+  const closeMatches = [
+    ...value.matchAll(/<\s*\/\s*(?:think(?:ing)?|analysis|thought|antthinking)\s*>/gi),
+  ];
+  const lastOpen = openMatches[openMatches.length - 1];
+  const lastClose = closeMatches[closeMatches.length - 1];
+  if (!lastOpen) return false;
+  if (!lastClose) return true;
+  return (lastClose.index ?? -1) < (lastOpen.index ?? -1);
+};
+
+const hasReasoningSignal = ({
+  rawText,
+  rawDelta,
+  mergedRaw,
+}: {
+  rawText: string;
+  rawDelta: string;
+  mergedRaw: string;
+}): boolean => {
+  if (hasUnclosedThinkingTag(mergedRaw)) return true;
+  return Boolean(extractReasoningBody(rawText) ?? extractReasoningBody(rawDelta));
+};
+
+const isReasoningOnlyAssistantChunk = ({
+  rawText,
+  rawDelta,
+  mergedRaw,
+  cleaned,
+  liveThinking,
+}: {
+  rawText: string;
+  rawDelta: string;
+  mergedRaw: string;
+  cleaned: string;
+  liveThinking: string | null;
+}): boolean => {
+  if (!liveThinking) return false;
+  const normalizedCleaned = normalizeReasoningComparable(cleaned);
+  const normalizedThinking = normalizeReasoningComparable(liveThinking);
+  const normalizedCleanedReasoningBody = normalizeReasoningComparable(
+    extractReasoningBody(cleaned) ?? ""
+  );
+  const cleanedMatchesReasoning =
+    !normalizedCleaned ||
+    normalizedCleaned === normalizedThinking ||
+    (normalizedCleanedReasoningBody.length > 0 &&
+      normalizedCleanedReasoningBody === normalizedThinking);
+  if (!cleanedMatchesReasoning) return false;
+  return hasReasoningSignal({ rawText, rawDelta, mergedRaw });
+};
+
 const resolveThinkingFromAgentStream = (
   data: Record<string, unknown> | null,
   rawStream: string,
@@ -234,8 +293,16 @@ export const planRuntimeAgentEvent = (
       const visibleText =
         extractText({ role: "assistant", content: mergedRaw }) ?? mergedRaw;
       const cleaned = stripUiMetadata(visibleText);
+      const reasoningOnlyChunk = isReasoningOnlyAssistantChunk({
+        rawText,
+        rawDelta,
+        mergedRaw,
+        cleaned,
+        liveThinking,
+      });
       if (
         cleaned &&
+        !reasoningOnlyChunk &&
         shouldPublishAssistantStream({
           nextText: cleaned,
           rawText,

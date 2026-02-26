@@ -209,6 +209,87 @@ describe("runtime agent event workflow", () => {
     expect(queue?.patch.streamText).toBe("hello world");
   });
 
+  it("does not publish assistant streamText for open thinking chunk", () => {
+    const result = planRuntimeAgentEvent(
+      createInput({
+        payload: createPayload({
+          stream: "assistant",
+          data: { text: "<thinking>planning" },
+        }),
+      })
+    );
+
+    const queue = findCommand(result.commands, "queueAgentPatch");
+    expect(queue).toBeDefined();
+    expect(queue?.patch.thinkingTrace).toBe("planning");
+    expect("streamText" in (queue?.patch ?? {})).toBe(false);
+  });
+
+  it("publishes assistant streamText once answer appears after closing thinking tag", () => {
+    const result = planRuntimeAgentEvent(
+      createInput({
+        payload: createPayload({
+          stream: "assistant",
+          data: { delta: "</thinking>Answer" },
+        }),
+        previousAssistantRaw: "<thinking>planning",
+      })
+    );
+
+    const queue = findCommand(result.commands, "queueAgentPatch");
+    expect(queue).toBeDefined();
+    expect(queue?.patch.thinkingTrace).toBe("planning");
+    expect(queue?.patch.streamText).toBe("Answer");
+  });
+
+  it("does not leak open thinking chunk into streamText when thinking traces are hidden", () => {
+    const result = planRuntimeAgentEvent(
+      createInput({
+        payload: createPayload({
+          stream: "assistant",
+          data: { text: "<thinking>planning" },
+        }),
+        agent: createAgent({ showThinkingTraces: false }),
+      })
+    );
+
+    const queue = findCommand(result.commands, "queueAgentPatch");
+    expect(queue).toBeDefined();
+    expect("streamText" in (queue?.patch ?? {})).toBe(false);
+  });
+
+  it("publishes visible assistant text when thinking block is closed even if text matches", () => {
+    const result = planRuntimeAgentEvent(
+      createInput({
+        payload: createPayload({
+          stream: "assistant",
+          data: { text: "<thinking>same</thinking>same" },
+        }),
+      })
+    );
+
+    const queue = findCommand(result.commands, "queueAgentPatch");
+    expect(queue).toBeDefined();
+    expect(queue?.patch.thinkingTrace).toBe("same");
+    expect(queue?.patch.streamText).toBe("same");
+  });
+
+  it("does not publish assistant streamText for reasoning-prefixed content", () => {
+    const result = planRuntimeAgentEvent(
+      createInput({
+        payload: createPayload({
+          stream: "assistant",
+          data: { text: "reasoning: planning" },
+        }),
+      })
+    );
+
+    const queue = findCommand(result.commands, "queueAgentPatch");
+    expect(queue).toBeDefined();
+    expect(queue?.patch.thinkingTrace).toBe("planning");
+    expect("streamText" in (queue?.patch ?? {})).toBe(false);
+  });
+
   it("plans tool call line append", () => {
     const result = planRuntimeAgentEvent(
       createInput({
