@@ -93,6 +93,27 @@ describe("skills gateway client", () => {
     expect(result).toBe(response);
   });
 
+  it("updates global enabled state through skills.update", async () => {
+    const response = {
+      ok: true,
+      skillKey: "browser",
+      config: {},
+    };
+    const client = {
+      call: vi.fn(async () => response),
+    } as unknown as GatewayClient;
+
+    await updateSkill(client, {
+      skillKey: " browser ",
+      enabled: false,
+    });
+
+    expect(client.call).toHaveBeenCalledWith("skills.update", {
+      skillKey: "browser",
+      enabled: false,
+    });
+  });
+
   it("fails fast when skill key is empty for updates", async () => {
     const client = {
       call: vi.fn(),

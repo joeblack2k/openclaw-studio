@@ -12,6 +12,16 @@ export type SkillSourceGroup = {
   skills: SkillStatusEntry[];
 };
 
+export type SkillReadinessState =
+  | "ready"
+  | "needs-setup"
+  | "unavailable"
+  | "disabled-globally";
+
+export type AgentSkillDisplayState = "ready" | "setup-required" | "not-supported";
+
+export type AgentSkillsAccessMode = "all" | "none" | "selected";
+
 const GROUP_DEFINITIONS: Array<{ id: Exclude<SkillSourceGroupId, "other">; label: string }> = [
   { id: "workspace", label: "Workspace Skills" },
   { id: "built-in", label: "Built-in Skills" },
@@ -30,6 +40,18 @@ const trimNonEmpty = (value: string): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+const OS_LABELS: Record<string, string> = {
+  darwin: "macOS",
+  linux: "Linux",
+  win32: "Windows",
+  windows: "Windows",
+};
+
+const toOsLabel = (value: string): string => {
+  const normalized = value.trim().toLowerCase();
+  return OS_LABELS[normalized] ?? value.trim();
+};
+
 const normalizeStringList = (values: string[] | undefined): string[] => {
   if (!Array.isArray(values)) {
     return [];
@@ -43,6 +65,23 @@ const normalizeStringList = (values: string[] | undefined): string[] => {
   }
   return normalized;
 };
+
+export const normalizeAgentSkillsAllowlist = (values: string[] | undefined): string[] => {
+  const normalized = normalizeStringList(values);
+  return Array.from(new Set(normalized));
+};
+
+export const deriveAgentSkillsAccessMode = (
+  values: string[] | undefined
+): AgentSkillsAccessMode => {
+  if (!Array.isArray(values)) {
+    return "all";
+  }
+  return normalizeAgentSkillsAllowlist(values).length === 0 ? "none" : "selected";
+};
+
+export const buildAgentSkillsAllowlistSet = (values: string[] | undefined): Set<string> =>
+  new Set(normalizeAgentSkillsAllowlist(values));
 
 const resolveGroupId = (skill: SkillStatusEntry): SkillSourceGroupId => {
   const source = trimNonEmpty(skill.source) ?? "";
@@ -116,7 +155,7 @@ export const buildSkillMissingDetails = (skill: SkillStatusEntry): string[] => {
 
   const os = normalizeStringList(skill.missing.os);
   if (os.length > 0) {
-    details.push(`Unsupported OS: ${os.join(", ")}`);
+    details.push(`Requires OS: ${os.map((value) => toOsLabel(value)).join(", ")}`);
   }
 
   return details;
@@ -146,6 +185,39 @@ export const buildSkillReasons = (skill: SkillStatusEntry): string[] => {
     reasons.push("unsupported OS");
   }
   return reasons;
+};
+
+export const isSkillOsIncompatible = (skill: SkillStatusEntry): boolean => {
+  return normalizeStringList(skill.missing.os).length > 0;
+};
+
+export const filterOsCompatibleSkills = (skills: SkillStatusEntry[]): SkillStatusEntry[] => {
+  return skills.filter((skill) => !isSkillOsIncompatible(skill));
+};
+
+export const deriveSkillReadinessState = (skill: SkillStatusEntry): SkillReadinessState => {
+  if (skill.disabled) {
+    return "disabled-globally";
+  }
+  if (isSkillOsIncompatible(skill) || skill.blockedByAllowlist) {
+    return "unavailable";
+  }
+  if (skill.eligible) {
+    return "ready";
+  }
+  return "needs-setup";
+};
+
+export const deriveAgentSkillDisplayState = (
+  readiness: SkillReadinessState
+): AgentSkillDisplayState => {
+  if (readiness === "ready") {
+    return "ready";
+  }
+  if (readiness === "unavailable") {
+    return "not-supported";
+  }
+  return "setup-required";
 };
 
 export const isBundledBlockedSkill = (skill: SkillStatusEntry): boolean => {

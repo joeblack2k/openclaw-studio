@@ -1,5 +1,6 @@
 import {
   type AgentPermissionsDraft,
+  resolvePresetDefaultsForRole,
   updateAgentPermissionsViaStudio,
 } from "@/features/agents/operations/agentPermissionsOperation";
 import type { GatewayClient } from "@/lib/gateway/GatewayClient";
@@ -17,6 +18,9 @@ type CreatedAgent = {
   agentId: string;
   sessionKey: string;
 };
+
+export const CREATE_AGENT_DEFAULT_PERMISSIONS: Readonly<AgentPermissionsDraft> =
+  Object.freeze(resolvePresetDefaultsForRole("autonomous"));
 
 const resolveBootstrapErrorMessage = (error: unknown): string => {
   if (error instanceof Error) {

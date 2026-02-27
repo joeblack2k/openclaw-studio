@@ -408,7 +408,9 @@ describe("useAgentSettingsMutationController", () => {
       expect(ctx.getValue().hasRestartBlockInProgress).toBe(true);
     });
 
-    expect(restartBlockHookParams?.block).not.toBeNull();
+    await waitFor(() => {
+      expect(restartBlockHookParams?.block).not.toBeNull();
+    });
 
     await act(async () => {
       restartBlockHookParams?.onTimeout();
@@ -470,6 +472,25 @@ describe("useAgentSettingsMutationController", () => {
     });
   });
 
+  it("loads_skills_when_settings_system_tab_is_active", async () => {
+    const report = {
+      workspaceDir: "/tmp/workspace",
+      managedSkillsDir: "/tmp/skills",
+      skills: [],
+    };
+    mockedLoadAgentSkillStatus.mockResolvedValue(report);
+    const ctx = renderController({
+      settingsRouteActive: true,
+      inspectSidebarAgentId: "agent-1",
+      inspectSidebarTab: "system",
+    });
+
+    await waitFor(() => {
+      expect(mockedLoadAgentSkillStatus).toHaveBeenCalledWith(expect.anything(), "agent-1");
+      expect(ctx.getValue().settingsSkillsReport).toEqual(report);
+    });
+  });
+
   it("use_all_and_disable_all_skills_write_via_config_queue", async () => {
     const ctx = renderController();
 
@@ -492,6 +513,40 @@ describe("useAgentSettingsMutationController", () => {
     expect(ctx.loadAgents).toHaveBeenCalledTimes(2);
     expect(ctx.refreshGatewayConfigSnapshot).toHaveBeenCalledTimes(2);
     expect(mockedLoadAgentSkillStatus).not.toHaveBeenCalled();
+  });
+
+  it("sets_selected_skills_allowlist_via_config_queue", async () => {
+    const ctx = renderController();
+
+    await act(async () => {
+      await ctx.getValue().handleSetSkillsAllowlist("agent-1", [" github ", "slack", "github"]);
+    });
+
+    expect(ctx.enqueueConfigMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "update-agent-skills" })
+    );
+    expect(mockedUpdateGatewayAgentSkillsAllowlist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: "agent-1",
+        mode: "allowlist",
+        skillNames: ["github", "slack"],
+      })
+    );
+    expect(ctx.loadAgents).toHaveBeenCalledTimes(1);
+    expect(ctx.refreshGatewayConfigSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects_empty_selected_skills_allowlist_before_gateway_call", async () => {
+    const ctx = renderController();
+
+    await act(async () => {
+      await ctx.getValue().handleSetSkillsAllowlist("agent-1", [" ", ""]);
+    });
+
+    expect(mockedUpdateGatewayAgentSkillsAllowlist).not.toHaveBeenCalled();
+    expect(ctx.getValue().settingsSkillsError).toBe(
+      "Cannot set selected skills mode: choose at least one skill."
+    );
   });
 
   it("installs_skill_dependencies_with_per_skill_busy_and_message_state", async () => {
@@ -530,6 +585,29 @@ describe("useAgentSettingsMutationController", () => {
     expect(mockedLoadAgentSkillStatus).toHaveBeenCalledTimes(2);
   });
 
+  it("refreshes_skills_after_system_setup_mutation_when_system_tab_is_active", async () => {
+    mockedLoadAgentSkillStatus.mockResolvedValue({
+      workspaceDir: "/tmp/workspace",
+      managedSkillsDir: "/tmp/skills",
+      skills: [],
+    });
+    const ctx = renderController({
+      settingsRouteActive: true,
+      inspectSidebarAgentId: "agent-1",
+      inspectSidebarTab: "system",
+    });
+
+    await waitFor(() => {
+      expect(mockedLoadAgentSkillStatus).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      await ctx.getValue().handleInstallSkill("agent-1", "browser", "browser", "install-browser");
+    });
+
+    expect(mockedLoadAgentSkillStatus).toHaveBeenCalledTimes(2);
+  });
+
   it("removes_skill_files_with_per_skill_busy_and_message_state", async () => {
     mockedLoadAgentSkillStatus.mockResolvedValue({
       workspaceDir: "/tmp/workspace",
@@ -562,6 +640,9 @@ describe("useAgentSettingsMutationController", () => {
 
     await waitFor(() => {
       expect(mockedLoadAgentSkillStatus).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(ctx.getValue().settingsSkillsReport?.workspaceDir).toBe("/tmp/workspace");
     });
 
     await act(async () => {
@@ -624,6 +705,40 @@ describe("useAgentSettingsMutationController", () => {
     expect(ctx.getValue().settingsSkillMessages.browser).toEqual({
       kind: "success",
       message: "API key saved",
+    });
+  });
+
+  it("toggles_global_skill_enabled_via_skill_update", async () => {
+    mockedLoadAgentSkillStatus.mockResolvedValue({
+      workspaceDir: "/tmp/workspace",
+      managedSkillsDir: "/tmp/skills",
+      skills: [],
+    });
+    const ctx = renderController({
+      settingsRouteActive: true,
+      inspectSidebarAgentId: "agent-1",
+      inspectSidebarTab: "skills",
+    });
+
+    await waitFor(() => {
+      expect(mockedLoadAgentSkillStatus).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      await ctx.getValue().handleSetSkillGlobalEnabled("agent-1", "browser", false);
+    });
+
+    expect(mockedUpdateSkill).toHaveBeenCalledWith(expect.anything(), {
+      skillKey: "browser",
+      enabled: false,
+    });
+    expect(ctx.enqueueConfigMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "update-skill-setup" })
+    );
+    expect(ctx.refreshGatewayConfigSnapshot).toHaveBeenCalledTimes(1);
+    expect(ctx.getValue().settingsSkillMessages.browser).toEqual({
+      kind: "success",
+      message: "Skill disabled globally",
     });
   });
 
@@ -746,6 +861,23 @@ describe("useAgentSettingsMutationController", () => {
           configChecks: [],
           install: [],
         },
+        {
+          name: "apple-notes",
+          description: "",
+          source: "openclaw-managed",
+          bundled: false,
+          filePath: "/tmp/skills/apple-notes/SKILL.md",
+          baseDir: "/tmp/skills/apple-notes",
+          skillKey: "apple-notes",
+          always: false,
+          disabled: false,
+          blockedByAllowlist: false,
+          eligible: false,
+          requirements: { bins: [], anyBins: [], env: [], config: [], os: ["darwin"] },
+          missing: { bins: [], anyBins: [], env: [], config: [], os: ["darwin"] },
+          configChecks: [],
+          install: [],
+        },
       ],
     });
     const ctx = renderController({
@@ -755,7 +887,7 @@ describe("useAgentSettingsMutationController", () => {
     });
 
     await waitFor(() => {
-      expect(ctx.getValue().settingsSkillsReport?.skills.length).toBe(3);
+      expect(ctx.getValue().settingsSkillsReport?.skills.length).toBe(4);
     });
 
     await act(async () => {

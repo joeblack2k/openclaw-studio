@@ -1,8 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { runCreateAgentBootstrapOperation } from "@/features/agents/operations/createAgentBootstrapOperation";
+import {
+  CREATE_AGENT_DEFAULT_PERMISSIONS,
+  runCreateAgentBootstrapOperation,
+} from "@/features/agents/operations/createAgentBootstrapOperation";
 
 describe("createAgentBootstrapOperation", () => {
+  it("exports_autonomous_create_defaults", () => {
+    expect(CREATE_AGENT_DEFAULT_PERMISSIONS).toEqual({
+      commandMode: "auto",
+      webAccess: true,
+      fileTools: true,
+    });
+  });
+
   it("retries load and lookup once before unresolved-created-agent disposition", async () => {
     const loadAgents = vi.fn(async () => undefined);
     const findAgentById = vi.fn(() => null);

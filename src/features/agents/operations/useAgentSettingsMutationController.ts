@@ -14,6 +14,7 @@ import {
   type MutationBlockState,
   type MutationWorkflowKind,
 } from "@/features/agents/operations/mutationLifecycleWorkflow";
+import type { SettingsRouteTab } from "@/features/agents/operations/settingsRouteWorkflow";
 import type { ConfigMutationKind } from "@/features/agents/operations/useConfigMutationQueue";
 import { useGatewayRestartBlock } from "@/features/agents/operations/useGatewayRestartBlock";
 import type { AgentState } from "@/features/agents/state/store";
@@ -35,7 +36,7 @@ import {
   updateGatewayAgentSkillsAllowlist,
 } from "@/lib/gateway/agentConfig";
 import { fetchJson } from "@/lib/http";
-import { canRemoveSkillSource } from "@/lib/skills/presentation";
+import { canRemoveSkillSource, filterOsCompatibleSkills } from "@/lib/skills/presentation";
 import { removeSkillFromGateway } from "@/lib/skills/remove";
 import {
   installSkill,
@@ -66,7 +67,7 @@ export type UseAgentSettingsMutationControllerParams = {
   gatewayConfigSnapshot: GatewayModelPolicySnapshot | null;
   settingsRouteActive: boolean;
   inspectSidebarAgentId: string | null;
-  inspectSidebarTab: string | null;
+  inspectSidebarTab: SettingsRouteTab | null;
   loadAgents: () => Promise<void>;
   refreshGatewayConfigSnapshot: () => Promise<GatewayModelPolicySnapshot | null>;
   clearInspectSidebar: () => void;
@@ -181,11 +182,13 @@ export function useAgentSettingsMutationController(params: UseAgentSettingsMutat
   );
 
   useEffect(() => {
+    const skillsTabActive =
+      params.inspectSidebarTab === "skills" || params.inspectSidebarTab === "system";
     if (
       !params.settingsRouteActive ||
       !params.inspectSidebarAgentId ||
       params.status !== "connected" ||
-      params.inspectSidebarTab !== "skills"
+      !skillsTabActive
     ) {
       skillsLoadRequestIdRef.current += 1;
       setSettingsSkillsReport(null);
@@ -635,9 +638,11 @@ export function useAgentSettingsMutationController(params: UseAgentSettingsMutat
 
   const reloadSkillsIfVisible = useCallback(
     async (agentId: string) => {
+      const skillsTabActive =
+        params.inspectSidebarTab === "skills" || params.inspectSidebarTab === "system";
       if (
         params.settingsRouteActive &&
-        params.inspectSidebarTab === "skills" &&
+        skillsTabActive &&
         params.inspectSidebarAgentId === agentId &&
         params.status === "connected"
       ) {
@@ -656,7 +661,11 @@ export function useAgentSettingsMutationController(params: UseAgentSettingsMutat
   const runSkillsMutation = useCallback(
     async (input: {
       agentId: string;
-      decisionKind: "use-all-skills" | "disable-all-skills" | "set-skill-enabled";
+      decisionKind:
+        | "use-all-skills"
+        | "disable-all-skills"
+        | "set-skills-allowlist"
+        | "set-skill-enabled";
       skillName?: string;
       run: (normalizedAgentId: string) => Promise<void>;
     }) => {
@@ -747,7 +756,7 @@ export function useAgentSettingsMutationController(params: UseAgentSettingsMutat
           const resolvedSkillName = skillName.trim();
           const visibleSkillNames = Array.from(
             new Set(
-              (settingsSkillsReport?.skills ?? [])
+              filterOsCompatibleSkills(settingsSkillsReport?.skills ?? [])
                 .map((entry) => entry.name.trim())
                 .filter((name) => name.length > 0)
             )
@@ -780,6 +789,34 @@ export function useAgentSettingsMutationController(params: UseAgentSettingsMutat
     [params.client, runSkillsMutation, settingsSkillsReport]
   );
 
+  const handleSetSkillsAllowlist = useCallback(
+    async (agentId: string, skillNames: string[]) => {
+      await runSkillsMutation({
+        agentId,
+        decisionKind: "set-skills-allowlist",
+        run: async (normalizedAgentId) => {
+          const normalizedSkillNames = Array.from(
+            new Set(
+              skillNames
+                .map((value) => value.trim())
+                .filter((value) => value.length > 0)
+            )
+          );
+          if (normalizedSkillNames.length === 0) {
+            throw new Error("Cannot set selected skills mode: choose at least one skill.");
+          }
+          await updateGatewayAgentSkillsAllowlist({
+            client: params.client,
+            agentId: normalizedAgentId,
+            mode: "allowlist",
+            skillNames: normalizedSkillNames,
+          });
+        },
+      });
+    },
+    [params.client, runSkillsMutation]
+  );
+
   const handleSkillApiKeyDraftChange = useCallback((skillKey: string, value: string) => {
     const normalizedSkillKey = skillKey.trim();
     if (!normalizedSkillKey) {
@@ -794,7 +831,11 @@ export function useAgentSettingsMutationController(params: UseAgentSettingsMutat
   const runSkillSetupMutation = useCallback(
     async (input: {
       agentId: string;
-      decisionKind: "install-skill" | "remove-skill" | "save-skill-api-key";
+      decisionKind:
+        | "install-skill"
+        | "remove-skill"
+        | "save-skill-api-key"
+        | "set-skill-global-enabled";
       skillKey: string;
       label: string;
       run: () => Promise<{ successMessage: string }>;
@@ -963,6 +1004,29 @@ export function useAgentSettingsMutationController(params: UseAgentSettingsMutat
     [params.client, runSkillSetupMutation, setSkillMessage, settingsSkillApiKeyDrafts]
   );
 
+  const handleSetSkillGlobalEnabled = useCallback(
+    async (agentId: string, skillKey: string, enabled: boolean) => {
+      const normalizedSkillKey = skillKey.trim();
+      await runSkillSetupMutation({
+        agentId,
+        decisionKind: "set-skill-global-enabled",
+        skillKey: normalizedSkillKey,
+        label: `${enabled ? "Enable" : "Disable"} ${normalizedSkillKey}`,
+        refreshConfigSnapshot: true,
+        run: async () => {
+          await updateSkill(params.client, {
+            skillKey: normalizedSkillKey,
+            enabled,
+          });
+          return {
+            successMessage: enabled ? "Skill enabled globally" : "Skill disabled globally",
+          };
+        },
+      });
+    },
+    [params.client, runSkillSetupMutation]
+  );
+
   return {
     settingsSkillsReport,
     settingsSkillsLoading,
@@ -989,10 +1053,12 @@ export function useAgentSettingsMutationController(params: UseAgentSettingsMutat
     handleUpdateAgentPermissions,
     handleUseAllSkills,
     handleDisableAllSkills,
+    handleSetSkillsAllowlist,
     handleSetSkillEnabled,
     handleInstallSkill,
     handleRemoveSkill,
     handleSkillApiKeyDraftChange,
     handleSaveSkillApiKey,
+    handleSetSkillGlobalEnabled,
   };
 }

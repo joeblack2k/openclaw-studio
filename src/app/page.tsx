@@ -79,7 +79,6 @@ import {
 import { createSpecialLatestUpdateOperation } from "@/features/agents/operations/specialLatestUpdateOperation";
 import {
   resolveAgentPermissionsDraft,
-  type AgentPermissionsDraft,
 } from "@/features/agents/operations/agentPermissionsOperation";
 import {
   executeStudioBootstrapLoadCommands,
@@ -91,6 +90,7 @@ import {
   runStudioFocusedSelectionPersistenceOperation,
 } from "@/features/agents/operations/studioBootstrapOperation";
 import {
+  CREATE_AGENT_DEFAULT_PERMISSIONS,
   applyCreateAgentBootstrapPermissions,
   executeCreateAgentBootstrapCommands,
   runCreateAgentBootstrapOperation,
@@ -114,11 +114,6 @@ import {
 } from "@/features/agents/operations/settingsRouteWorkflow";
 import { useSettingsRouteController } from "@/features/agents/operations/useSettingsRouteController";
 const PENDING_EXEC_APPROVAL_PRUNE_GRACE_MS = 500;
-const CREATE_AGENT_DEFAULT_PERMISSIONS: AgentPermissionsDraft = {
-  commandMode: "ask",
-  webAccess: false,
-  fileTools: false,
-};
 
 type MobilePane = "fleet" | "chat";
 type SettingsSidebarItem = SettingsRouteTab;
@@ -249,6 +244,7 @@ const AgentStudioPage = () => {
   const [createAgentModalError, setCreateAgentModalError] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<MobilePane>("chat");
   const [inspectSidebar, setInspectSidebar] = useState<InspectSidebarState>(null);
+  const [systemInitialSkillKey, setSystemInitialSkillKey] = useState<string | null>(null);
   const [personalityHasUnsavedChanges, setPersonalityHasUnsavedChanges] = useState(false);
   const [settingsSidebarItem, setSettingsSidebarItem] = useState<SettingsSidebarItem>("personality");
   const [createAgentBlock, setCreateAgentBlock] = useState<CreateAgentBlockState | null>(null);
@@ -308,6 +304,14 @@ const AgentStudioPage = () => {
     if (!inspectSidebarAgentId) return null;
     return agents.find((entry) => entry.agentId === inspectSidebarAgentId) ?? null;
   }, [agents, inspectSidebarAgentId]);
+  useEffect(() => {
+    setSystemInitialSkillKey(null);
+  }, [inspectSidebarAgentId]);
+  useEffect(() => {
+    if (effectiveSettingsTab !== "system") {
+      setSystemInitialSkillKey(null);
+    }
+  }, [effectiveSettingsTab]);
   const settingsAgentPermissionsDraft = useMemo(() => {
     if (!inspectSidebarAgent) return null;
     const baseConfig =
@@ -360,9 +364,9 @@ const AgentStudioPage = () => {
   const settingsSkillScopeWarning = useMemo(() => {
     if (!inspectSidebarAgent) return null;
     if (inspectSidebarAgent.agentId === settingsDefaultAgentId) {
-      return "Skill setup actions are gateway-wide. Install actions run in this default agent workspace.";
+      return "Setup actions are shared across agents. Installs run in this shared workspace.";
     }
-    return `Skill setup actions are gateway-wide. Install actions currently run in the default agent workspace (${settingsDefaultAgentId}), not this agent (${inspectSidebarAgent.agentId}).`;
+    return `Setup actions are shared across agents. Installs currently run in ${settingsDefaultAgentId} (shared workspace), not ${inspectSidebarAgent.agentId}.`;
   }, [inspectSidebarAgent, settingsDefaultAgentId]);
   const focusedPendingExecApprovals = useMemo(() => {
     if (!focusedAgentId) return unscopedPendingExecApprovals;
@@ -821,6 +825,15 @@ const AgentStudioPage = () => {
     replace: router.replace,
     confirmDiscard: () => window.confirm("Discard changes?"),
   });
+  const handleOpenSystemSkillSetup = useCallback(
+    (skillKey?: string) => {
+      const normalized = skillKey?.trim() ?? "";
+      setSystemInitialSkillKey(normalized.length > 0 ? normalized : null);
+      setSettingsSidebarItem("system");
+      handleSettingsRouteTabChange("system");
+    },
+    [handleSettingsRouteTabChange]
+  );
 
   const handleOpenCreateAgentModal = useCallback(() => {
     if (createAgentBusy) return;
@@ -905,7 +918,7 @@ const AgentStudioPage = () => {
                   client,
                   agentId,
                   sessionKey,
-                  draft: CREATE_AGENT_DEFAULT_PERMISSIONS,
+                  draft: { ...CREATE_AGENT_DEFAULT_PERMISSIONS },
                   loadAgents,
                 });
               },
@@ -1398,6 +1411,7 @@ const AgentStudioPage = () => {
                       { id: "personality", label: "Behavior" },
                       { id: "capabilities", label: "Capabilities" },
                       { id: "skills", label: "Skills" },
+                      { id: "system", label: "System setup" },
                       { id: "automations", label: "Automations" },
                       { id: "advanced", label: "Advanced" },
                     ] as const
@@ -1464,7 +1478,9 @@ const AgentStudioPage = () => {
                                 ? "automations"
                                 : effectiveSettingsTab === "skills"
                                   ? "skills"
-                                : effectiveSettingsTab === "advanced"
+                                  : effectiveSettingsTab === "system"
+                                    ? "system"
+                                    : effectiveSettingsTab === "advanced"
                                   ? "advanced"
                                   : "capabilities"
                             }
@@ -1496,13 +1512,11 @@ const AgentStudioPage = () => {
                             skillMessages={settingsMutationController.settingsSkillMessages}
                             skillApiKeyDrafts={settingsMutationController.settingsSkillApiKeyDrafts}
                             defaultAgentScopeWarning={settingsSkillScopeWarning}
+                            systemInitialSkillKey={systemInitialSkillKey}
+                            onSystemInitialSkillHandled={() => {
+                              setSystemInitialSkillKey(null);
+                            }}
                             skillsAllowlist={settingsAgentSkillsAllowlist}
-                            onUseAllSkills={() =>
-                              settingsMutationController.handleUseAllSkills(inspectSidebarAgent.agentId)
-                            }
-                            onDisableAllSkills={() =>
-                              settingsMutationController.handleDisableAllSkills(inspectSidebarAgent.agentId)
-                            }
                             onSetSkillEnabled={(skillName, enabled) =>
                               settingsMutationController.handleSetSkillEnabled(
                                 inspectSidebarAgent.agentId,
@@ -1510,6 +1524,7 @@ const AgentStudioPage = () => {
                                 enabled
                               )
                             }
+                            onOpenSystemSetup={handleOpenSystemSkillSetup}
                             onInstallSkill={(skillKey, name, installId) =>
                               settingsMutationController.handleInstallSkill(
                                 inspectSidebarAgent.agentId,
@@ -1531,6 +1546,13 @@ const AgentStudioPage = () => {
                               settingsMutationController.handleSaveSkillApiKey(
                                 inspectSidebarAgent.agentId,
                                 skillKey
+                              )
+                            }
+                            onSetSkillGlobalEnabled={(skillKey, enabled) =>
+                              settingsMutationController.handleSetSkillGlobalEnabled(
+                                inspectSidebarAgent.agentId,
+                                skillKey,
+                                enabled
                               )
                             }
                             cronJobs={settingsMutationController.settingsCronJobs}

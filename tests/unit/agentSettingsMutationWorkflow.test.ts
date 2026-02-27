@@ -32,6 +32,14 @@ describe("agentSettingsMutationWorkflow", () => {
       { kind: "install-skill", agentId: "agent-1", skillKey: "browser" },
       createContext({ status: "disconnected" })
     );
+    const allowlistResult = planAgentSettingsMutation(
+      { kind: "set-skills-allowlist", agentId: "agent-1" },
+      createContext({ status: "disconnected" })
+    );
+    const globalToggleResult = planAgentSettingsMutation(
+      { kind: "set-skill-global-enabled", agentId: "agent-1", skillKey: "browser" },
+      createContext({ status: "disconnected" })
+    );
     const removeResult = planAgentSettingsMutation(
       { kind: "remove-skill", agentId: "agent-1", skillKey: "browser" },
       createContext({ status: "disconnected" })
@@ -50,6 +58,18 @@ describe("agentSettingsMutationWorkflow", () => {
       guardReason: "not-connected",
     });
     expect(installResult).toEqual({
+      kind: "deny",
+      reason: "start-guard-deny",
+      message: null,
+      guardReason: "not-connected",
+    });
+    expect(allowlistResult).toEqual({
+      kind: "deny",
+      reason: "start-guard-deny",
+      message: null,
+      guardReason: "not-connected",
+    });
+    expect(globalToggleResult).toEqual({
       kind: "deny",
       reason: "start-guard-deny",
       message: null,
@@ -146,6 +166,10 @@ describe("agentSettingsMutationWorkflow", () => {
       { kind: "save-skill-api-key", agentId: "agent-1", skillKey: "  " },
       createContext()
     );
+    const globalToggleResult = planAgentSettingsMutation(
+      { kind: "set-skill-global-enabled", agentId: "agent-1", skillKey: "  " },
+      createContext()
+    );
     const removeResult = planAgentSettingsMutation(
       { kind: "remove-skill", agentId: "agent-1", skillKey: "  " },
       createContext()
@@ -161,10 +185,27 @@ describe("agentSettingsMutationWorkflow", () => {
       reason: "missing-skill-key",
       message: null,
     });
+    expect(globalToggleResult).toEqual({
+      kind: "deny",
+      reason: "missing-skill-key",
+      message: null,
+    });
     expect(removeResult).toEqual({
       kind: "deny",
       reason: "missing-skill-key",
       message: null,
+    });
+  });
+
+  it("allows_setting_skills_allowlist_with_normalized_agent_id", () => {
+    const result = planAgentSettingsMutation(
+      { kind: "set-skills-allowlist", agentId: " agent-1 " },
+      createContext()
+    );
+
+    expect(result).toEqual({
+      kind: "allow",
+      normalizedAgentId: "agent-1",
     });
   });
 });

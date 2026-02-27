@@ -11,7 +11,9 @@ type GuardedActionKind =
   | "update-agent-permissions"
   | "use-all-skills"
   | "disable-all-skills"
+  | "set-skills-allowlist"
   | "set-skill-enabled"
+  | "set-skill-global-enabled"
   | "install-skill"
   | "remove-skill"
   | "save-skill-api-key";
@@ -64,7 +66,9 @@ const isGuardedAction = (
   kind === "update-agent-permissions" ||
   kind === "use-all-skills" ||
   kind === "disable-all-skills" ||
+  kind === "set-skills-allowlist" ||
   kind === "set-skill-enabled" ||
+  kind === "set-skill-global-enabled" ||
   kind === "install-skill" ||
   kind === "remove-skill" ||
   kind === "save-skill-api-key";
@@ -149,6 +153,7 @@ export const planAgentSettingsMutation = (
   }
 
   if (
+    request.kind === "set-skill-global-enabled" ||
     request.kind === "install-skill" ||
     request.kind === "remove-skill" ||
     request.kind === "save-skill-api-key"

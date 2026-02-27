@@ -353,4 +353,24 @@ describe("useSettingsRouteController", () => {
       tab: "skills",
     });
   });
+
+  it("switches to system tab without discard prompt when leaving skills", () => {
+    const ctx = renderController({
+      settingsRouteActive: true,
+      settingsRouteAgentId: "agent-1",
+      inspectSidebar: { agentId: "agent-1", tab: "skills" },
+      activeTab: "skills" satisfies SettingsRouteTab,
+      personalityHasUnsavedChanges: true,
+    });
+
+    act(() => {
+      ctx.getValue().handleSettingsRouteTabChange("system");
+    });
+
+    expect(ctx.confirmDiscard).not.toHaveBeenCalled();
+    expect(ctx.setInspectSidebar).toHaveBeenCalledWith({
+      agentId: "agent-1",
+      tab: "system",
+    });
+  });
 });

@@ -120,6 +120,24 @@ describe("settingsRouteWorkflow", () => {
     ]);
   });
 
+  it("changes from skills to system without discard confirmation", () => {
+    expect(
+      planSettingsTabChangeCommands({
+        nextTab: "system",
+        currentInspectSidebar: { agentId: "agent-1", tab: "skills" },
+        settingsRouteAgentId: "agent-1",
+        settingsRouteActive: true,
+        personalityHasUnsavedChanges: true,
+        discardConfirmed: false,
+      })
+    ).toEqual([
+      {
+        kind: "set-inspect-sidebar",
+        value: { agentId: "agent-1", tab: "system" },
+      },
+    ]);
+  });
+
   it("plans route-agent synchronization commands", () => {
     expect(
       planSettingsRouteSyncCommands({
