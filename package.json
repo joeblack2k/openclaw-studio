@@ -19,7 +19,7 @@
     "pw:open:max": "scripts/playwright-open-maximized.sh"
   },
   "dependencies": {
-    "@multiavatar/multiavatar": "github:multiavatar/Multiavatar",
+    "@multiavatar/multiavatar": "1.0.7",
     "@noble/ed25519": "^3.0.0",
     "@radix-ui/react-slot": "^1.2.4",
     "@vercel/otel": "^2.1.0",
