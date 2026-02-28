@@ -82,8 +82,7 @@ This fork publishes container images to:
 - `ghcr.io/joeblack2k/openclaw-studio`
 
 The GitHub Actions workflow at `.github/workflows/docker-ghcr.yml` builds:
-- `linux/amd64`
-- `linux/arm64`
+- `linux/amd64` (homelab-compatible)
 
 Tags include `latest` on `main`, branch/tag refs, and commit SHA tags.
 
