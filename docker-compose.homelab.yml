@@ -1,0 +1,19 @@
+services:
+  openclaw-studio:
+    image: ghcr.io/joeblack2k/openclaw-studio:latest
+    container_name: openclaw-studio
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "3000"
+      NEXT_PUBLIC_GATEWAY_URL: "ws://192.168.2.2:18789"
+      OPENCLAW_STATE_DIR: "/data/openclaw"
+      # Required when exposed beyond localhost.
+      STUDIO_ACCESS_TOKEN: "change-me"
+      # Optional if the gateway host should be managed over SSH from Studio actions.
+      OPENCLAW_GATEWAY_SSH_TARGET: "homelab@192.168.2.2"
+      OPENCLAW_GATEWAY_SSH_USER: "homelab"
+    volumes:
+      - ./data:/data/openclaw

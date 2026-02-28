@@ -76,6 +76,42 @@ Notes:
 - Avoid serving Studio behind `/studio` unless you configure `basePath` and rebuild.
 - If Studio is reachable beyond loopback, `STUDIO_ACCESS_TOKEN` is required.
 
+## Docker (GHCR) for Homelab
+
+This fork publishes container images to:
+- `ghcr.io/joeblack2k/openclaw-studio`
+
+The GitHub Actions workflow at `.github/workflows/docker-ghcr.yml` builds:
+- `linux/amd64`
+- `linux/arm64`
+
+Tags include `latest` on `main`, branch/tag refs, and commit SHA tags.
+
+### Pull and run directly
+
+```bash
+docker pull ghcr.io/joeblack2k/openclaw-studio:latest
+docker run -d \
+  --name openclaw-studio \
+  --restart unless-stopped \
+  -p 3000:3000 \
+  -e HOST=0.0.0.0 \
+  -e PORT=3000 \
+  -e STUDIO_ACCESS_TOKEN=change-me \
+  -e NEXT_PUBLIC_GATEWAY_URL=ws://192.168.2.2:18789 \
+  -e OPENCLAW_STATE_DIR=/data/openclaw \
+  -v $(pwd)/data:/data/openclaw \
+  ghcr.io/joeblack2k/openclaw-studio:latest
+```
+
+### Deploy with Docker Compose
+
+Use `docker-compose.homelab.yml` as a baseline:
+
+```bash
+docker compose -f docker-compose.homelab.yml up -d
+```
+
 ## How It Connects (Mental Model)
 
 There are **two separate network paths**:

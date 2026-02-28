@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AgentChatPanel } from "@/features/agents/components/AgentChatPanel";
 import { AgentCreateModal } from "@/features/agents/components/AgentCreateModal";
@@ -1766,9 +1767,24 @@ const AgentStudioPage = () => {
 };
 
 export default function Home() {
+  const loadingFallback = (
+    <div className="relative min-h-screen w-screen overflow-hidden bg-background">
+      <div className="flex min-h-screen items-center justify-center px-6">
+        <div className="glass-panel ui-panel w-full max-w-md px-6 py-6 text-center">
+          <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            OpenClaw Studio
+          </div>
+          <div className="mt-3 text-sm text-muted-foreground">Booting Studio…</div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <AgentStoreProvider>
-      <AgentStudioPage />
+      <Suspense fallback={loadingFallback}>
+        <AgentStudioPage />
+      </Suspense>
     </AgentStoreProvider>
   );
 }
